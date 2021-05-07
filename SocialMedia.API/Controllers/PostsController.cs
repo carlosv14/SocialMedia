@@ -5,9 +5,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using SocialMedia.API.Database;
-using SocialMedia.API.Database.Entities;
 using SocialMedia.API.Models;
+using SocialMedia.Core.Entities;
+using SocialMedia.Core.Enum;
+using SocialMedia.Core.Interfaces;
 
 namespace SocialMedia.API.Controllers
 {
@@ -15,61 +16,48 @@ namespace SocialMedia.API.Controllers
     [Route("[controller]")]
     public class PostsController : ControllerBase
     {
-        private readonly SocialMediaDbContext _socialMediaContext;
+        private readonly IPostService _postService;
+        private readonly ICommentService _commentService;
 
-        public PostsController(SocialMediaDbContext socialMediaContext)
+        public PostsController(IPostService postService, ICommentService commentService)
         {
-            _socialMediaContext = socialMediaContext;
+            _postService = postService;
+            _commentService = commentService;
         }
 
         [HttpGet]
         public ActionResult<IEnumerable<PostDto>> Get()
         {
-            var posts = _socialMediaContext.Posts;
-            var returnList = new List<PostDto>();
-            foreach (var post in posts)
-            {
-                returnList.Add(new PostDto
+            var posts = _postService.GetPosts()
+                .Result
+                .Select(x => new PostDto
                 {
-                    PostId = post.Id,
-                    Content = post.Content,
-                    Date = post.Date
+                    Content = x.Content,
+                    Date = x.Date,
+                    PostId = x.Id
                 });
-            }
-
-            //return posts.Select(x => new PostDto
-            //{
-            //    PostId = x.Id,
-            //    Content = x.Content,
-            //    Date = x.Date
-            //});
-
-            return Ok(returnList);
+            return Ok(posts);
         }
 
         [HttpGet("{id}")]
         public ActionResult<PostDto> Get(int id)
         {
-            //var post = _socialMediaContext
-            //    .Posts
-            //    .FirstOrDefault(x => x.Id == id);
-            foreach (var post in _socialMediaContext.Posts)
+            var postResult = _postService.GetPostsById(id);
+            if (postResult.ResponseCode == ResponseCode.NotFound)
             {
-                if (post.Id == id)
-                {
-                    return Ok(new PostDto
-                    {
-                        PostId = post.Id,
-                        Date = post.Date,
-                        Content = post.Content
-                    });
-                }
+                return NotFound(postResult.Error);
             }
-            return NotFound();
+
+            return Ok(new PostDto
+            {
+                Content = postResult.Result.Content,
+                Date = postResult.Result.Date,
+                PostId = postResult.Result.Id
+            });
         }
 
         [HttpPost]
-        public async Task<ActionResult<PostDto>> Post([FromBody] PostDto post)
+        public ActionResult<PostDto> Post([FromBody] PostDto post)
         {
             var postEntity = new Post
             {
@@ -77,56 +65,51 @@ namespace SocialMedia.API.Controllers
                 Date = DateTime.Now
             };
 
-            await _socialMediaContext.Posts.AddAsync(postEntity);
-            await _socialMediaContext.SaveChangesAsync();
+            var result = _postService.CreatePost(postEntity);
+
+            if (result.ResponseCode == ResponseCode.Error)
+            {
+                return BadRequest(result.Error);
+            }
+
             return Ok(post);
         }
 
         //posts/1/comments
         [HttpPost("{postId}/comments")]
-        public async Task<ActionResult<CommentDto>> Post(int postId, [FromBody] CommentDto comment)
+        public ActionResult<CommentDto> Post(int postId, [FromBody] CommentDto comment)
         {
-            var post = _socialMediaContext
-                .Posts
-                .FirstOrDefault(x => x.Id == postId);
-
-            if (post == null)
-            {
-                return BadRequest($"El post con id {postId} no existe");
-            }
-
             var commentEntity = new Comment
             {
                 Content = comment.Content,
                 PostId = postId
             };
 
-            await _socialMediaContext.Comments.AddAsync(commentEntity);
-            await _socialMediaContext.SaveChangesAsync();
+            var result = _commentService.CreateComment(commentEntity);
 
+            if (result.ResponseCode == ResponseCode.NotFound)
+            {
+                return NotFound(result.Error);
+            }
+            
             return Ok(comment);
         }
 
         //posts/1/comments
         [HttpGet("{postId}/comments")]
-        public async Task<ActionResult<IEnumerable<CommentDto>>> GetCommentsForPost(int postId)
+        public ActionResult<IEnumerable<CommentDto>> GetCommentsForPost(int postId)
         {
-            var comments = await _socialMediaContext.Comments.Where(c => c.PostId == postId).ToListAsync();
-            return Ok(comments.Select(c => new CommentDto
+            var result = _commentService.FilterCommentsByPostId(postId);
+            if (result.ResponseCode == ResponseCode.NotFound)
+            {
+                return NotFound(result.Error);
+            }
+            return Ok(result.Result.Select(c => new CommentDto
             {
                 Content = c.Content,
                 PostId = c.PostId,
                 CommentId = c.Id
             }));
-        }
-
-        [HttpDelete("{postId}")]
-        public async Task<ActionResult<bool>> Delete(int postId)
-        {
-            var commentToDelete = await _socialMediaContext.Posts.FirstOrDefaultAsync(x => x.Id == postId);
-            _socialMediaContext.Remove(commentToDelete);
-            await _socialMediaContext.SaveChangesAsync();
-            return Ok(true);
         }
     }
 }

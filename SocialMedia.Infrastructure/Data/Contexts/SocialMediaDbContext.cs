@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using SocialMedia.API.Database.Entities;
+using SocialMedia.Core.Entities;
 
-namespace SocialMedia.API.Database
+namespace SocialMedia.Infrastructure.Data.Contexts
 {
     public class SocialMediaDbContext : DbContext
     {

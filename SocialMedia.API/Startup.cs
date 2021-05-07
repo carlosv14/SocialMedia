@@ -10,7 +10,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using SocialMedia.API.Database;
+using SocialMedia.Core.Entities;
+using SocialMedia.Core.Interfaces;
+using SocialMedia.Core.Services;
+using SocialMedia.Infrastructure.Data.Contexts;
+using SocialMedia.Infrastructure.Data.Repositories;
 
 namespace SocialMedia.API
 {
@@ -27,7 +31,16 @@ namespace SocialMedia.API
         public void ConfigureServices(IServiceCollection services)
         {
             services
-                .AddDbContext<SocialMediaDbContext>(c => c.UseSqlite("Data Source=SocialMedia.db"));
+                .AddDbContext<SocialMediaDbContext>(c =>
+                {
+                    c.UseSqlite("Data Source=SocialMedia.db");
+                    c.EnableSensitiveDataLogging();
+                });
+
+            services.AddScoped<IRepository<Post>, PostRepository>();
+            services.AddScoped<IRepository<Comment>, CommentRepository>();
+            services.AddScoped<IPostService, PostService>();
+            services.AddScoped<ICommentService, CommentService>();
             services.AddControllers();
         }
 
